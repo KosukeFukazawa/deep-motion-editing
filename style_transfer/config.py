@@ -13,11 +13,11 @@ class Config:
     for_try = False  # set to True only if you want to quickly check if all parts (latent space visualization, result output, etc.) function correctly 
 
     # Save & Visualization
-    name = 'pretrained'     # name of the experiment, for training from scratch please use a different name
+    name = 'disc_use_rot'     # name of the experiment, for training from scratch please use a different name
 
     cuda_id = 0
 
-    # hyyyper params
+    # hyper params
 
     use_rotloss = True
     use_newdecoder = True
@@ -146,7 +146,7 @@ class Config:
     4) conv, [channel[-1] -> num_classes]
 
     """
-    disc_channels = [pos3d_channels, 96, 144]
+    disc_channels = [pos3d_channels + rot_channels - 4, 128, 144]
     disc_down_n = 2  # 64 -> 32 -> 16 -> 8 -> 4
     disc_kernel_size = 6
     disc_stride = 1

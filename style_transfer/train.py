@@ -6,7 +6,7 @@ sys.path.insert(0, BASEPATH)
 import argparse
 import importlib
 
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from data_loader import get_dataloader
 from itertools import cycle
 

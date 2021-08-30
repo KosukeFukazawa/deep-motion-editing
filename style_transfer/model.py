@@ -78,6 +78,30 @@ class Model(nn.Module):
     def merge_pos_glb(pos, glb): # [B, (J - 1) * 3, T], [B, 4, T]
         return torch.cat([pos, glb], dim=-2)
 
+    """
+    New !!
+    """
+    @staticmethod
+    def merge_pos_rot_glb_from_dec(pos,rot,glb):
+        """
+        pos : local positions [B, (J - 1) * 3, T]
+        rot : local rotations [B, Jo * 4, T]
+        """
+        return torch.cat([pos, rot, glb], dim=-2)
+    
+    """
+    New !!
+    """
+    @staticmethod
+    def merge_pos_rot_from_dataset(pos,rot):
+        """
+        pos and rot should be raw data !
+        """
+        pos, glb = pos[:,:-4,:], pos[:,-4:,:]
+        rot = rot[:, :-4, :]
+        return torch.cat([pos, rot, glb], dim=-2)
+
+
     @staticmethod
     def convert_to_disc(raw): # convert [B, (J - 1) * 3 + 4 (or 3, in 3dpos), T] to representations for the discriminator
         vraw = raw[..., 1:] - raw[..., :-1]  # local velocity -> this differentiation is the same for positions & rotations
@@ -132,13 +156,15 @@ class Model(nn.Module):
             l_tw_rec = (l_tw_r + l_tw_s) / 2.0
             l_tw = self.weighted_average(l_tw_t, l_tw_rec)
 
-            xtf = self.merge_pos_glb(xt, xglb)
-            xrf = self.merge_pos_glb(xr, xglb)
-            xsf = self.merge_pos_glb(xs, xglb)
+            xtf = self.merge_pos_rot_glb_from_dec(xt, rxt, xglb) # [B, (J - 1) * 3 + Jo * 4 + 4, T]  [128, 188, 32]
+            xrf = self.merge_pos_rot_glb_from_dec(xr, rxr, xglb)
+            xsf = self.merge_pos_rot_glb_from_dec(xs, rxs, xglb)
+            dis_xa = self.merge_pos_rot_from_dataset(co_data["style3draw"], co_data["contentraw"])
+            dis_xb = self.merge_pos_rot_from_dataset(cl_data["style3draw"], cl_data["contentraw"])
 
             # input to discriminator
-            da = self.convert_to_disc(co_data["style3draw"])
-            db = self.convert_to_disc(cl_data["style3draw"])
+            da = self.convert_to_disc(dis_xa)
+            db = self.convert_to_disc(dis_xb)
             dt = self.convert_to_disc(xtf)
             dr = self.convert_to_disc(xrf)
             ds = self.convert_to_disc(xsf)
@@ -233,12 +259,15 @@ class Model(nn.Module):
             return ret_dict
 
         elif mode == 'dis_update':
+
             xb = cl_data["style3draw"]
             xa = co_data["style3draw"]
+            rb = cl_data["contentraw"]
             lb = cl_data["label"]
             la = co_data["label"]
             xb.requires_grad_()
-            db = self.convert_to_disc(xb)
+            rb.requires_grad_()
+            db = self.convert_to_disc(self.merge_pos_rot_from_dataset(xb, rb))
             l_real_p, acc_r, resp_r = self.dis.calc_dis_real_loss(db, lb)
             l_real = self.gan_w * l_real_p
             l_real.backward(retain_graph=True)
@@ -254,8 +283,8 @@ class Model(nn.Module):
                 xt, rxt = self.gen.decode(c_xa, s_xb)
                 xr, rxr = self.gen.decode(c_xa, s_xa)
 
-                dt = self.convert_to_disc(self.merge_pos_glb(xt, xglb))
-                dr = self.convert_to_disc(self.merge_pos_glb(xr, xglb))
+                dt = self.convert_to_disc(self.merge_pos_rot_glb_from_dec(xt, rxt, xglb))
+                dr = self.convert_to_disc(self.merge_pos_rot_glb_from_dec(xr, rxr, xglb))
 
             l_fake_p_r, acc_f_r, resp_f_r = self.dis.calc_dis_fake_loss(dr.detach(), la)
             l_fake_p_t, acc_f_t, resp_f_t = self.dis.calc_dis_fake_loss(dt.detach(), lb)
